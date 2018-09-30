@@ -20,8 +20,8 @@ class Twilio
     /**
      * Twilio constructor.
      *
-     * @param  TwilioService $twilioService
-     * @param TwilioConfig $config
+     * @param TwilioService $twilioService
+     * @param TwilioConfig  $config
      */
     public function __construct(TwilioService $twilioService, TwilioConfig $config)
     {
@@ -33,8 +33,8 @@ class Twilio
      * Send a TwilioMessage to the a phone number.
      *
      * @param  TwilioMessage $message
-     * @param  string $to
-     * @param bool $useAlphanumericSender
+     * @param  string        $to
+     * @param  bool          $useAlphanumericSender
      * @return mixed
      * @throws CouldNotSendNotification
      */
@@ -48,6 +48,14 @@ class Twilio
             return $this->sendSmsMessage($message, $to);
         }
 
+        if ($message instanceof TwilioFlowMessage) {
+            if ($useAlphanumericSender && $sender = $this->getAlphanumericSender()) {
+                $message->from($sender);
+            }
+
+            return $this->sendFlowMessage($message, $to);
+        }
+
         if ($message instanceof TwilioCallMessage) {
             return $this->makeCall($message, $to);
         }
@@ -58,8 +66,8 @@ class Twilio
     /**
      * Send an sms message using the Twilio Service.
      *
-     * @param TwilioSmsMessage $message
-     * @param string $to
+     * @param  TwilioSmsMessage $message
+     * @param  string           $to
      * @return \Twilio\Rest\Api\V2010\Account\MessageInstance
      * @throws CouldNotSendNotification
      */
@@ -74,29 +82,59 @@ class Twilio
             $params['messagingServiceSid'] = $serviceSid;
         }
 
-        $this->fillOptionalParams($params, $message, [
+        $this->fillOptionalParams(
+            $params,
+            $message,
+            [
             'statusCallback',
             'statusCallbackMethod',
             'applicationSid',
             'maxPrice',
             'provideFeedback',
             'validityPeriod',
-        ]);
+            ]
+        );
 
         if ($message instanceof TwilioMmsMessage) {
-            $this->fillOptionalParams($params, $message, [
+            $this->fillOptionalParams(
+                $params,
+                $message,
+                [
                 'mediaUrl',
-            ]);
+                ]
+            );
         }
 
         return $this->twilioService->messages->create($to, $params);
     }
 
     /**
+     * Send an flow message using the Twilio Service.
+     *
+     * @param  TwilioFlowMessage $message
+     * @param  string            $to
+     * @return \Twilio\Rest\Studio\V1\Flow\EngagementInstance
+     * @throws CouldNotSendNotification
+     */
+    protected function sendFlowMessage(TwilioFlowMessage $message, $to)
+    {
+        return $this->twilioService->studio
+            ->flows($message->flow)
+            ->engagements
+            ->create(
+                $to,
+                $this->getFrom($message),
+                [
+                    "Parameters" => json_encode($message->content)
+                ]
+            );
+    }
+
+    /**
      * Make a call using the Twilio Service.
      *
-     * @param TwilioCallMessage $message
-     * @param string $to
+     * @param  TwilioCallMessage $message
+     * @param  string            $to
      * @return \Twilio\Rest\Api\V2010\Account\CallInstance
      * @throws CouldNotSendNotification
      */
@@ -106,14 +144,18 @@ class Twilio
             'url' => trim($message->content),
         ];
 
-        $this->fillOptionalParams($params, $message, [
+        $this->fillOptionalParams(
+            $params,
+            $message,
+            [
             'statusCallback',
             'statusCallbackMethod',
             'method',
             'status',
             'fallbackUrl',
             'fallbackMethod',
-        ]);
+            ]
+        );
 
         return $this->twilioService->calls->create(
             $to,
@@ -125,7 +167,7 @@ class Twilio
     /**
      * Get the from address from message, or config.
      *
-     * @param TwilioMessage $message
+     * @param  TwilioMessage $message
      * @return string
      * @throws CouldNotSendNotification
      */
@@ -151,9 +193,9 @@ class Twilio
     }
 
     /**
-     * @param array $params
+     * @param array         $params
      * @param TwilioMessage $message
-     * @param array $optionalParams
+     * @param array         $optionalParams
      * @return mixed
      */
     protected function fillOptionalParams(&$params, $message, $optionalParams)
